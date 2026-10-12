@@ -1,0 +1,151 @@
+\chapter{晶片案例與實作}
+\label{ch:cases}
+\section{低電壓設計流程}
+低電壓實作需要掌握目標範圍內的單元行為，包括功能、漏電、傳播延遲、輸入轉換時間敏感度與循序時序限制。僅外推標稱電壓元件庫，無法提供這些資訊。當弱反轉敏感度占主導地位時，統計行為與記憶體良率尤其重要。
+
+Markovi\'{c} 等人介紹一種歷史合成方法：以電晶體層級的延遲與電壓特性，將低電壓速度目標換算為更嚴格的標稱電壓時序限制 \cite[Sec.~VII]{markovic2010}。合成先建立足夠的標稱時序餘裕，再降低供應電壓；漸進式尺寸調整則在保留既定拓撲下，減少不必要的閘極電容。
+
+此方法對應該研究所用的工具與元件庫，不代表現代工具普遍缺乏低電壓支援。其路徑縮放假設仍需驗證，因為不同閘型、互連、循序單元及 process corner 可能具有不同縮放行為。最終簽核應使用實際操作條件下完成特性分析的模型，而非只依賴標稱電壓的等效限制。
+
+實體設計接著應驗證預定電壓策略。電源佈線、壓降、時脈分配、跨域連接、資料保持與切換順序，都必須符合已分析的操作點。佈局後寄生效應可能改變時序及能量最低點，因此早期分析的最佳點只是起點。
+
+\section{FIR 濾波器量測}
+\textnormal{瓶頸。}極低電壓會降低驅動能力並延長執行時間，因此最低功能電壓的能量效率可能不佳。
+
+\textnormal{解法。}0.18-$\mu$m FIR 研究比較兩個可程式化 8-bit、8-tap 濾波器，皆輸出未截斷的 19-bit 結果 \cite[Sec.~IV]{calhoun2005}。兩版本分別採用傳統單元選擇流程，以及以降低最低操作電壓為目標的修改流程。測試晶片因而直接檢驗：追求更低功能電壓，是否也能改善能量。
+
+\textnormal{實測證據與代價。}論文的示波器範例顯示，濾波器可在 150 mV、約 3.2 kHz 正確運作，但量得的能量最低點位於 250--300 mV \cite[Figs.~10--12]{calhoun2005}。兩個濾波器皆涵蓋寬操作範圍，從極低電壓下的數 kHz，到較高電壓下的 MHz 等級。
+
+以最低電壓為目標的版本，在典型條件下每週期約增加 50\% 能量； worst-case corner 的能量改善則低於 10\%。原文將多數額外成本歸因於受限單元集合與合成選擇。\textnormal{設計原則。}應以所需速率下，每次完成操作的能量選擇實作。只有當元件庫、合成及漏電成本也改善此目標時，降低功能電壓下限才有益。
+
+\section{近臨界處理器}
+\textnormal{瓶頸。}只有在較慢的處理器仍能滿足工作負載期限時，降低每指令能量才有實際價值。
+
+\textnormal{解法。}使用 near-threshold operation 點，在執行速率與每指令能量之間取捨。Dreslinski 等人整理 Subliminal 與 Phoenix 處理器結果，量化能量與效能的交換 \cite[Sec.~III]{dreslinski2010}。\textnormal{證據與代價。}表~\ref{tab:proc} 的倍率皆為同一設計內的比較； near-threshold 數值以原文標稱值除以報告倍率推算，並非額外量測。
+
+\begin{table}[htbp]
+\centering\tablebegin
+\caption{文獻 \cite{dreslinski2010} 整理的處理器結果。}
+\label{tab:proc}
+\begin{tabularx}{\textwidth}{@{}p{0.24\textwidth}YY@{}}
+\toprule 量測項目 & 標稱數值 & near-threshold 比較 \\\midrule
+Subliminal 頻率 & 20.5 MHz & 降低 $11.4\times$；推算約 1.80 MHz。 \\
+Subliminal 能量 & 33.1 pJ/instruction & 降低 $6.6\times$；推算約 5.02 pJ/instruction。 \\
+Phoenix 頻率 & 9.13 MHz & 降低 $9.1\times$；推算約 1.00 MHz。 \\
+Phoenix 能量 & 29.6 pJ/instruction & 降低 $9.8\times$；推算約 3.02 pJ/instruction。 \\\bottomrule
+\end{tabularx}
+\end{table}
+
+\textnormal{設計原則。}接受每指令節能效益前，應先確認期限可行性。量測趨勢顯示同一處理器內的取捨；每指令、每濾波輸出及每等效操作能量，分別對應不同有效工作與記憶體活動。
+
+\section{SVD 處理器}
+\textnormal{瓶頸。}低電壓資料路徑必須維持有效的總吞吐量，同時限制重複硬體與漏電。
+
+\textnormal{解法。}Markovi\'{c} 等人將低能量最佳化應用於自適應多天線通道處理器 \cite[Sec.~VII-B]{markovic2010}。實作結合字長選擇、 architectural folding 、 data-stream interleaving 、閘尺寸調整與 voltage scaling 。 folding 及 interleaving 降低硬體需求，尺寸與電壓調整則影響實際操作能量。
+
+\textnormal{實測證據與代價。}該 90-nm CMOS 晶片在 0.4 V、100 MHz 操作，以 34 mW 提供 70 GOPS 的 12-bit 加法等效操作，核心面積為 3.5 mm$^2$ \cite[Fig.~23]{markovic2010}。由此可得約 2.1 GOPS/mW 與 20 GOPS/mm$^2$。原文說明實測晶片特性較接近典型／快速條件，而非設計目標的 slow corner ，因此 100 MHz 並非 所有 process corner 皆保證可達。
+
+將原文功率除以操作速率可得
+\begin{equation}
+\frac{34\times10^{-3}}{70\times10^9}
+\approx0.486\ \mathrm{pJ/equivalent\ operation}.
+\end{equation}
+此推算值使用作者的算術等效操作單位，不是完整 SVD 任務或一條處理器指令的能量。若與其他晶片比較，必須統一算術精度、工作定義及納入的電路範圍。
+
+原文最佳化圖中， folding 使面積縮減 2.6 倍， interleaving 使面積縮減 13.8 倍，尺寸調整降低 40\% 能量， voltage scaling 步驟則有七倍能量改善 \cite[Fig.~22]{markovic2010}。這些數值分屬不同轉換與指標，不能直接相乘成單一總降壓增益。
+
+\textnormal{設計原則。}選擇電壓前，應共同最佳化精度、並行程度與資源共用。此專用架構透過安排演算法以配合可用速度，維持低電壓下的總運算量；評估效益時仍須納入儲存與排程成本。
+
+\section{視訊解碼器}
+\textnormal{瓶頸。}視訊負載變化很大，核心與記憶體控制器所需速率也不同，採用共同峰值設定容易浪費能量。
+
+\textnormal{解法。}UDVS 綜述描述一顆 65-nm H.264/AVC 解碼器，採用平行化、 pipelining 、可降壓 SRAM，以及處理核心和記憶體控制器的獨立電壓域 \cite[Sec.~VI-A]{udvs2010}。不同域面臨不同負載，分別設定電壓與頻率，可避免所有單元都使用共同峰值設定。
+
+\textnormal{實測證據與代價。}核心可於 0.5 V 支援 QCIF、15 frames/s，並於 0.85 V 支援 1080p、30 frames/s。報告功率範圍約為 29 \uW{} 至 8 mW，以約 $280\times$ 功率範圍涵蓋約 $164\times$ 工作負載範圍 \cite[p.~207]{udvs2010}。這是不同負載間的操作範圍，不是固定運算能量降低 $280\times$。
+
+即使解析度與影格率相同，視訊內容仍會改變需求。在原文 720p、30 frames/s 測試中，mobcal 與 shields 使用 0.7-V、14-MHz 核心，消耗 1.8 mW；parkrun 則使用 0.8-V、25-MHz 核心，消耗 3.2 mW。這些測試的記憶體控制器皆為 0.84 V、50 MHz \cite[Table~2]{udvs2010}。
+
+可降壓記憶體與獨立電壓域會增加介面、控制與驗證工作。引用功率不含 I/O 接墊，因此量測範圍小於完整視訊平台。\textnormal{設計原則。}依各域負載調整設定，同時確認記憶體服務速率與跨域成本，並以一致的視訊任務比較能量。
+
+\section{低電壓微控制器}
+\textnormal{瓶頸。}SRAM 功能可行性與轉換損失限制邏輯降壓的效益，輕載時尤其明顯。
+
+\textnormal{解法。}第二個系統以 65-nm CMOS 整合 16-bit 微控制器、128-kb SRAM 與切換電容 DC--DC 轉換器 \cite[Sec.~VI-B]{udvs2010}。邏輯與記憶體操作範圍為 0.3--0.6 V；轉換器可由 1.2-V 輸入產生 0.3--1.1 V，但較寬的轉換器輸出範圍，不等於完整微控制器負載已驗證的操作範圍。
+
+\textnormal{實測證據與代價。}在 500 mV、25~$^\circ$C 下，邏輯與記憶體每時脈週期消耗 27.2 pJ。25~$^\circ$C 時，頻率由 0.3 V 下的 8.7 kHz，到 0.6 V 下的 1 MHz。研究量測 20 顆晶片，並呈現能量及頻率的正規化分散情況 \cite[Fig.~23]{udvs2010}。因不同指令可能使用不同週期數，每週期能量不應改標為每指令能量。
+
+在 500-mV 輸出與 12-\uW{} 微控制器負載下，轉換效率約 75\%，轉換器單獨峰值效率為 78\% \cite[Fig.~24]{udvs2010}。唯有該效率適用於相同操作條件時，才可用 $27.2/0.75$ 推得約 36.3 pJ 的每週期上游能量。這是條件式示意計算，不能取代條件一致的電源端量測。
+
+待機時，系統可將負載電壓降至 300 mV，邏輯與記憶體功率低於 1 \uW。計入轉換損失後，原文報告相較待機維持 500 mV，漏電功率約降低 $2.1\times$ \cite[Fig.~25]{udvs2010}。因此主動模式能量最佳化與待機資料保持採用不同準則。\textnormal{設計原則。}應以完整工作週期的實測電源端能量，共同最佳化主動與待機設定。整合轉換器可支援低負載電壓，但其效率與控制成本，決定多少負載端節能能真正反映至電源端。
+
+\section{能量與面積比較}
+\textnormal{證據分類。}「實測」（Measured）指晶片觀測結果，包括由綜述整理的量測；「推算」（Derived）指使用原文數值進行算術計算；「模型／示意」（Modeled / Illustrative）指假設模型或教學範例。推算數值會繼承輸入資料的條件及不確定性。
+
+\begin{table}[htbp]
+\centering\tablebegin
+\caption{代表性結果的證據類型與工程意義。各列保留原研究的工作單位及量測範圍。}
+\label{tab:evidence}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.14\textwidth}>{\raggedright\arraybackslash}p{0.19\textwidth}YY@{}}
+\toprule 案例 & 證據類型 & 代表性結果 & 工程意義 \\\midrule
+FIR \cite{calhoun2005} & 實測 & 150-mV 操作；MEP 為 250--300 mV & 功能可行性與最低能量不同。 \\
+處理器 \cite{dreslinski2010} & 推算 & Subliminal：5.02 pJ/instruction、1.80 MHz & 由原文倍率推算；需檢查期限。 \\
+SVD \cite{markovic2010} & 實測 & 0.4 V、100 MHz、34 mW、70 GOPS & 專用架構維持低電壓吞吐量。 \\
+SVD \cite{markovic2010} & 推算 & 每等效操作 0.486 pJ & 功率除以速率；保留等效操作單位。 \\
+視訊 \cite{udvs2010} & 實測 & 29 \uW{} 至 8 mW & 不同負載；不含 I/O 接墊。 \\
+MCU \cite{udvs2010} & 實測 & 500 mV、25~$^\circ$C 下為 27.2 pJ/cycle & 邏輯與 SRAM；另評估轉換器。 \\
+MCU 估算 & 條件式推算 & $27.2/0.75=36.3$ pJ/cycle & 僅在效率對應相同負載點時適用。 \\
+MEP 示意 & 模型／示意 & MEP 為 0.41 V；可行最佳點為 0.55 V & 假設限制使最佳點移動。 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+跨案例有意義的比較，是哪些機制改變了設計決策。FIR 區分功能可行性與能量最佳性；處理器揭示降低每指令能量的速度代價；SVD 顯示配合演算法的組織方式如何恢復吞吐量；視訊解碼器呈現獨立電壓域配合負載的價值；MCU 則把評估範圍延伸至轉換及待機損失。這些結果支持依限制條件選擇方案，而非依最小的 pJ 數值排名。
+
+
+ Pareto frontier包含一組設計：在所考慮的候選中，無法改善某項目標而不犧牲另一項。其意義取決於比較集合與限制。SVD 論文在製程正規化後，與選定的 ISSCC 晶片比較能量及面積效率 \cite{markovic2010}；該歷史圖表不是今日通用排名，正規化也不會消除演算法、精度或記憶體流量的差異。
+
+公平評估應先固定有效工作、精度、吞吐量及量測範圍，再比較能量、面積、延遲與穩健性。若無法匹配這些條件，應報告同一設計內的電壓趨勢，而不是宣稱某顆晶片在所有情況都更有效率。
+
+\section{實作與驗證流程}
+圖~\ref{fig:designflow} 將前述證據轉成可反覆修正的決策流程。分支表示候選對策，而非強制配方；若多個限制同時作用，應評估技術組合，並在修改實作後回到特性分析。
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[>=Latex,
+b/.style={draw,rounded corners=2pt,align=center,text width=85mm,minimum height=12mm,font=\normalsize},
+c/.style={draw,align=center,text width=36mm,minimum height=17mm,font=\normalsize}]
+\node[b] (req) at (0,0) {定義工作負載、期限、正確性\\與電源端能量範圍};
+\node[b] (char) at (0,-1.7) {分析低電壓操作特性\\並辨識主要限制};
+\node[c] (tim) at (-4.8,-3.6) {時序\\尺寸調整／ pipelining };
+\node[c] (mem) at (0,-3.6) {SRAM\\讀取隔離／輔助};
+\node[c] (pvt) at (4.8,-3.6) {PVT\\ body bias ／AVS};
+\node[b] (imp) at (0,-5.6) {實作並驗證時序、記憶體、\\電源端能量與切換行為};
+\node[draw,diamond,aspect=3,align=center,inner sep=2pt,font=\normalsize] (test) at (0,-7.6) {滿足能量、時序\\與可靠度目標？};
+\node[b] (sil) at (0,-9.8) {跨工作負載及 PVT 量測晶片，\\驗證支援的操作區域};
+\node[b] (deploy) at (0,-11.6) {部署有界控制並保留裕量};
+\draw[->] (req)--(char);
+\draw[->] (char.south)--++(0,-0.3)-|(tim.north);
+\draw[->] (char)--(mem);
+\draw[->] (char.south)--++(0,-0.3)-|(pvt.north);
+\draw[->] (tim.south)--++(0,-0.35)-|(imp.north);
+\draw[->] (mem)--(imp);
+\draw[->] (pvt.south)--++(0,-0.35)-|(imp.north);
+\draw[->] (imp)--(test);
+\draw[->] (test)--node[right]{是}(sil);
+\draw[->] (sil)--(deploy);
+\draw[->] (test.west)--(-7,-7.6) node[above right]{否}--(-7,-1.7)--(char.west);
+\draw[->,dashed] (sil.east)--(7,-9.8)--(7,-1.7)--(char.east);
+\node[rotate=90,fill=white,inner sep=3pt] at (7,-6.5) {量測與預期不符};
+\end{tikzpicture}
+\caption{依本報告整理的建議設計與驗證流程。實線回授使未通過目標的設計重新評估；虛線回授將晶片差異帶回特性分析。此圖是工程指引，並非本報告新製作晶片所驗證的流程。}
+\label{fig:designflow}
+\end{figure}
+
+驗證關卡除了功能良率，也應納入時脈、儲存、通訊與轉換器成本。若電源端損失占主導地位，即使邏輯時序通過，也應重新檢視穩壓器與電壓策略。晶片驗證應記錄工作負載、負載電壓、溫度、樣本數、失效準則、執行時間及電源端能量；部署時採用已驗證區域，並為未觀測路徑、快速壓降及監測失配保留裕量。
+\FloatBarrier
+
+
+以簡單計算為例，需要一百萬週期的任務，在 10 MHz、10 mW 下需 0.1 s、1 mJ；在 2 MHz、3 mW 下雖功率較低，卻需 0.5 s、1.5 mJ；在 5 MHz、4 mW 下則需 0.2 s、0.8 mJ。若期限為 0.25 s，僅第一及第三個操作點可行。這些假設數字用來示範評估程序，並非模擬或實測電壓曲線。
+
+實作研究應明確區分分析模型、電路模擬與量測。模型揭示關係，模擬評估特定模型集合，晶片測試則在既定條件下驗證抽樣實體元件。單一類別無法獨自建立所有操作保證。
+

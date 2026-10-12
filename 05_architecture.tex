@@ -1,0 +1,149 @@
+\chapter{架構與系統設計}
+\label{ch:architecture}
+\section{平行化設計}
+平行化可將額外硬體轉換為時序餘裕。若兩條獨立路徑交替處理樣本，每條路徑可降至原頻率的一半，同時維持總吞吐量。較低的速度需求可支援更低供應電壓。理想複製會使切換電容加倍、每路頻率減半，因此切換功率改善主要來自降壓 \cite{chandrakasan1992}。
+
+經典加法器與比較器範例採用 2.0-$\mu$m 製程，基準設計為 5 V、路徑需求為 25 ns。使用兩條平行路徑後，每路可放寬至 50 ns，電壓降為 2.9 V。納入 2.15 的有效電容倍率可得
+\begin{equation}
+\frac{P_{\mathrm{parallel}}}{P_{\mathrm{ref}}}
+=2.15\left(\frac{2.9}{5}\right)^2\frac{1}{2}\approx0.36.
+\end{equation}
+這是原論文基於實作的架構範例，而非所有平行設計皆可實測節省 64\% 功率的通則 \cite[Sec.~IV-E]{chandrakasan1992}。
+
+有效平行度受到相依性、通訊與記憶體頻寬限制。若運算因等待共用資源而停頓，複製硬體可能只增加漏電，卻未帶來有效吞吐量。在低電壓下，還須將額外漏電累積於較長的任務時間。因此平行化應與電壓及工作負載映射共同選擇。
+
+\section{管線化與資源共用}
+ pipelining藉由加入暫存器，降低每級的組合邏輯深度。在固定吞吐量下，此餘裕可用於降壓，而非提高頻率。同一經典範例中，近似平衡的管線級允許 2.9-V 操作；有效電容倍率為 1.15，相對功率約為 0.39 \cite{chandrakasan1992}。
+
+\begin{table}[htbp]
+\centering\tablebegin
+\caption{文獻 \cite[Table II]{chandrakasan1992} 的架構範例。面積與功率均相對該研究基準正規化。}
+\begin{tabularx}{\textwidth}{@{}Yrrr@{}}
+\toprule 架構 & 電壓（V） & 面積 & 功率 \\\midrule
+基準資料路徑 & 5.0 & 1.0 & 1.00 \\
+ pipelining 資料路徑 & 2.9 & 1.3 & 0.39 \\
+平行資料路徑 & 2.9 & 3.4 & 0.36 \\
+ pipelining 結合平行化 & 2.0 & 3.7 & 0.20 \\\bottomrule
+\end{tabularx}
+\end{table}
+
+額外暫存器與時脈分配會消耗能量，也可能增加以週期計算的延遲。尤其當循序電路成本占主導地位時，深度 pipelining 未必是最佳節能選擇。建立時間、保持時間、時脈至輸出延遲及時脈不確定性，共同限制有用的管線級深度。
+
+接近 MEP 時，相反的架構轉換可能更有利。 folding或分時多工，讓多個操作共用硬體，以降低面積與漏電，但需要更快的共用單元。由於能量曲線在最低點附近可能平坦，適度提高電壓即可恢復足夠速度，使資源共用在總能量上仍有優勢 \cite[Sec.~VI]{markovic2010}。
+
+ interleaving獨立資料流可提高使用率，使具有回授的演算法也能有效共用資源，但效益取決於儲存與排程成本。整體目標不是最大化平行度或 folding 程度，而是在所需吞吐量與記憶體行為下，選擇使能量最低的並行程度。
+
+\section{核心叢集與電壓域}
+ near-threshold 邏輯與記憶體可能各有不同的有利操作電壓。Dreslinski 等人討論的叢集架構，將較慢的低電壓核心配置於共用第一階快取周圍，讓快取以不同速度與電壓運作 \cite[Sec.~V-A]{dreslinski2010}。此方式可利用仍比周圍 near-threshold 核心更快的記憶體。
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[>=Latex,
+box/.style={draw,align=center,text width=37mm,minimum height=15mm,font=\normalsize}]
+\node[box] (core) at (0,0) {核心叢集\\$V_{\mathrm{logic}}$};
+\node[box] (cache) at (7,0) {共用快取\\$V_{\mathrm{mem}}$};
+\node[box] (reg) at (0,-2.4) {可程式化\\電源供應};
+\node[box] (ctl) at (7,-2.4) {工作負載\\與時序控制};
+\draw[<->] (core)--node[above,align=center,font=\normalsize]{跨域\\介面}(cache);
+\draw[->] (reg)--(core);
+\draw[->] (reg.north east)--(cache.south west);
+\draw[->] (ctl)--(reg);
+\draw[->] (core.south east)--(ctl.north west);
+\end{tikzpicture}
+\caption{邏輯與記憶體採獨立電壓並結合自適應控制的概念圖。實際系統需要位準轉換、同步，以及經特性分析的切換順序。依文獻 \cite{dreslinski2010,udvs2010} 整理。}
+\end{figure}
+
+共用快取可減少部分通訊或一致性流量，但也增加競爭，並可能改變未命中率。跨電壓域需要位準轉換與適當的跨時脈域介面，其能量與延遲應納入評估，不能將各自最佳化區塊之間的連接視為零成本。
+
+同一綜述將三維整合視為縮短通訊距離、利用 near-threshold computing 低功率密度的機會 \cite{dreslinski2010}。這是一個架構方向，而非所有堆疊式 near-threshold 系統都較節能的證據。垂直互連、熱耦合、電源供應與製造限制，仍屬於系統取捨的一部分。
+
+\section{動態與自適應降壓}
+ dynamic voltage scaling （DVS）依操作需求改變供應電壓； dynamic voltage and frequency scaling （DVFS）也改變時脈頻率。 adaptive voltage scaling （AVS）則利用回授，依觀測條件調整設定。UDVS 將支援範圍擴大到元件、記憶體、感測與電源轉換可能面臨顯著不同操作區域的程度 \cite{udvs2010}。
+
+對必須在期限 $D$ 前完成 $N$ 個週期的工作負載，若各項時間不重疊，可得簡化時間預算：
+\begin{equation}
+f_{\mathrm{req}}\geq\frac{N}{D-T_{\mathrm{transition}}-T_{\mathrm{other}}}.
+\end{equation}
+分母必須為正，且重疊進行的傳輸不應重複扣除。控制器應選擇可安全支援所需頻率的電壓。通常降壓前先降頻，升頻前則先升壓並等待穩定；實際順序必須依照實作的時序與供電規格。
+
+ replica path 、環形振盪器或 canary 結構可反映時序狀態，但不會自動追蹤所有實際路徑。局部失配與不同的電壓敏感度，可能降低監測器與關鍵路徑的相關性。自適應系統可減少過大的保護裕量；若未證明覆蓋範圍及暫態行為，就不能宣稱所有裕量皆可移除 \cite{gonzalez1997,udvs2010}。
+
+最低能量追蹤的目標，與滿足時序的最低電壓控制不同。若漏電累積時間或轉換損失使最低時序可行電壓效率不佳，最佳能量設定可能較高。能量感測、搜尋步驟與控制活動本身也有成本。實用控制器可使用有限個已完成特性分析的操作點、最短駐留時間與遲滯，避免調整所耗能量超過節省量。
+
+\clearpage
+\section{電源轉換與能量}
+送至邏輯與記憶體的能量，不同於從電池或上游電源取得的能量。當轉換效率近似固定時，
+\begin{equation}
+E_{\mathrm{source}}\approx\frac{E_{\mathrm{load}}}{\eta(\VDD,I_{\mathrm{load}})}+E_{\mathrm{extra}}.
+\label{eq:source}
+\end{equation}
+已包含於實測效率的損失，不應再計入 $E_{\mathrm{extra}}$。對變動負載，積分輸入功率通常比假設單一效率更合理。
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[>=Latex,
+b/.style={draw,align=center,text width=36mm,minimum height=17mm,font=\normalsize}]
+\node[b] (src) at (0,0) {電池／電源端\\$E_{\mathrm{source}}$};
+\node[b] (dc) at (5,0) {DC--DC 轉換器\\$\eta(V,I_{\mathrm{load}})$};
+\node[b] (load) at (10,0) {邏輯與 SRAM\\$E_{\mathrm{load}}$};
+\draw[->,thick] (src)--(dc);
+\draw[->,thick] (dc)--(load);
+\node[draw,align=center,text width=122mm,below=13mm of dc] (cost)
+{任務層級能量計算：主動與閒置期間、轉換損失、\\電壓切換能量，以及任何獨立控制電源};
+\draw[->] (dc)--(cost);
+\end{tikzpicture}
+\caption{電源端至負載端的概念能量範圍。轉換效率隨電壓與負載電流改變，閒置時間及切換能量也會移動最佳供電設定。各項損失只計算一次：實測輸入能量已包含其量測範圍內的損失。}
+\label{fig:energyflow}
+\end{figure}
+
+電感式與切換電容式轉換器，具有不同的整合及效率取捨。UDVS 綜述描述使用晶片外被動元件的低額外功耗降壓轉換器，以及支援多種轉換比的可程式化切換電容轉換器 \cite[Sec.~IV]{udvs2010}。當負載進入微瓦等級時，切換頻率、寄生電容、轉換比與控制功率都很重要。
+
+簡單數值例子可說明量測範圍的影響。若負載能量從 10 降至 8 個任意單位，但效率由 90\% 降至 60\%，電源端能量反而從 11.1 升至 13.3 單位。這是示意計算而非晶片量測，說明核心節能不能直接換算成電池壽命改善。
+
+模式切換成本也決定低電壓模式的最短有效持續時間。在簡化的固定功率比較中，若 $P_H>P_L$ 且仍滿足有效吞吐量，耗能 $E_{\mathrm{tr}}$ 的切換，需要超過 $E_{\mathrm{tr}}/(P_H-P_L)$ 的駐留時間才能回收成本。實際策略還應納入執行時間變化、穩壓器響應與閒置行為。
+
+\clearpage
+\section{跨層級協同設計}
+圖~\ref{fig:crosslayer} 連結三個設計層級；表~\ref{tab:crosslayer} 將瓶頸對應至解法、成本及指標。各項措施應以相同任務與電源端能量範圍評估。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[>=Latex,
+wide/.style={draw,align=center,text width=126mm,minimum height=12mm,font=\normalsize},
+layer/.style={draw,align=center,text width=39mm,minimum height=19mm,font=\normalsize}]
+\node[wide] (v) at (0,0) { supply-voltage scaling ：降低切換能量};
+\node[layer] (d) at (-4.7,-2) {元件\\驅動／漏電\\變異};
+\node[layer] (c) at (0,-2) {電路\\SRAM、雜訊、時序};
+\node[layer] (a) at (4.7,-2) {架構\\吞吐量\\記憶體／共用};
+\node[wide] (obj) at (0,-4) {最小化每項有效任務的電源端能量\\並滿足時序、正確性與可靠度限制};
+\draw[->] (v.south -| d.north)--(d.north);
+\draw[->] (v)--(c);
+\draw[->] (v.south -| a.north)--(a.north);
+\draw[<->] (d)--(c);
+\draw[<->] (c)--(a);
+\draw[->] (d.south)--(obj.north -| d.south);
+\draw[->] (c)--(obj);
+\draw[->] (a.south)--(obj.north -| a.south);
+\end{tikzpicture}
+\caption{三個設計層級的整合概念。各層級都會改變其他層級面臨的限制與成本，因此應以同一系統能量範圍評估。}
+\label{fig:crosslayer}
+\end{figure}
+
+\begin{table}[H]
+\centering\tablebegin
+\caption{跨層級決策對照。候選解法均須在目標電壓及工作負載下進行特性分析。}
+\label{tab:crosslayer}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.18\textwidth}YYY@{}}
+\toprule 瓶頸／層級 & 候選解法 & 主要成本 & 評估指標 \\\midrule
+驅動／變異；元件 & 尺寸調整、臨界電壓選擇、 body bias & 電容、漏電、偏壓成本 & 延遲分布與任務能量 \\
+讀寫失效；電路 & read-decoupled SRAM、輔助與感測 & 單元及周邊面積、輔助能量 & 陣列良率、存取時間與能量 \\
+時序；電路 & soft-edge clocking 、路徑最佳化 & 保持時間限制、時脈能量 & 建立／保持時間良率、週期能量 \\
+吞吐量；架構 & 平行化或 pipelining & 暫存器、閒置漏電、通訊 & 每秒完成任務數、任務能量 \\
+使用率不足；架構 & folding 或 interleaving & 排程、儲存、較高單元速率 & 使用率、面積、任務能量 \\
+電源損失；系統 & 電壓域控制、高效率轉換 & 切換、感測、轉換損失 & 工作週期內的電源端任務能量 \\\bottomrule
+\end{tabularx}
+\end{table}
+
+依總任務能量選擇對策，並在每次修改後重新分析特性。第六部分說明主要限制如何隨設計改變。
+\FloatBarrier
+

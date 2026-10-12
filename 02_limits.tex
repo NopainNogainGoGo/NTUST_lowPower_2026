@@ -1,0 +1,104 @@
+\chapter{降壓瓶頸與極限}
+\label{ch:limits}
+\section{驅動電流與延遲}
+傳播延遲的一階估計為
+\begin{equation}
+t_p\approx\frac{C_L\VDD}{\Ion}.
+\label{eq:delay}
+\end{equation}
+降低電壓可減少需要搬移的電荷，也會削弱搬移電荷的電流。接 near-threshold 電壓時，電流下降的效應占主導地位。在適用的 superthreshold 範圍內，可採用冪次近似：
+\begin{equation}
+\Ion\approx K(\VDD-\VTH)^m,\qquad
+t_p\approx K_d\frac{\VDD}{(\VDD-\VTH)^m}.
+\label{eq:alphapower}
+\end{equation}
+其中 $m$ 是元件模型的指數，與切換活動因子 $\alpha$ 不同。此模型可說明過驅電壓縮小時敏感度增加的原因，但不適用於臨界點及 subthreshold 區。近似式分母為零，並不代表實際 CMOS 電路完全停止導通 \cite{gonzalez1997}。
+
+在弱反轉區，簡化電流式為
+\begin{equation}
+I_D\approx I_0\exp\left(\frac{V_{\mathrm{GS}}-\VTH}{nU_T}\right)
+\left(1-\exp\left[-\frac{V_{\mathrm{DS}}}{U_T}\right]\right).
+\label{eq:subthreshold}
+\end{equation}
+此關係可解釋電流對閘極電壓及臨界電壓變異的高度敏感性。它是精簡物理模型，不能取代經特定製程驗證的電晶體模型； drain-induced barrier lowering 、溫度相依性及寄生效應，可能需要額外項目描述 \cite{calhoun2005,markovic2010}。
+
+Dreslinski 等人指出，在其討論的工業用 45-nm 製程中，供應電壓由 1.1 V 降至 0.4 V 時，FO4 延遲約增加十倍 \cite[Sec.~IV-A]{dreslinski2010}。此結果屬於特定條件下的例子，並非所有 near-threshold 電路的固定代價。實際關鍵路徑還包含佈線、輸入轉換時間、扇出及循序元件時序，因此不能總是由單一代表性反相器推論整條路徑的縮放行為。
+
+\section{最低能量點}
+ minimum-energy point（MEP）描述每次操作能量最低的位置。對固定的一次操作，可使用下列簡化模型：
+\begin{equation}
+\Eop(\VDD)=C_{\mathrm{sw}}\VDD^2+
+\VDD I_{\mathrm{leak}}(\VDD)T_{\mathrm{op}}(\VDD).
+\label{eq:mep}
+\end{equation}
+切換活動因子已包含於 $C_{\mathrm{sw}}$。動態能量隨電壓下降，但執行時間可能快速增加，使漏電能量反而上升，因此兩者總和可能在操作範圍內出現最低點。若函數可微，且最低點位於可行區域內部，則該點滿足 $d\Eop/d\VDD=0$。此條件表示兩種效應的邊際變化互相抵消，而非兩項能量本身相等 \cite{calhoun2005}。
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=0.96\textwidth,height=8.3cm,xmin=0.2,xmax=1,ymin=0,ymax=1.6,xtick={0.2,0.3,...,1.0},
+xlabel={供應電壓（V）},ylabel={示意正規化能量},
+legend style={at={(0.98,0.98)},anchor=north east,font=\normalsize},grid=major]
+\fill[red!10] (axis cs:0.2,0) rectangle (axis cs:0.32,1.6);
+\fill[orange!14] (axis cs:0.32,0) rectangle (axis cs:0.55,1.6);
+\addplot[black,thick,domain=0.2:1,samples=180]{x*x};
+\addlegendentry{切換能量}
+\addplot[gray,dashed,thick,domain=0.2:1,samples=180]{0.005*x*exp((0.6-x)/0.055)};
+\addlegendentry{漏電能量}
+\addplot[black,very thick,dashdotted,domain=0.2:1,samples=180]{x*x+0.005*x*exp((0.6-x)/0.055)};
+\addlegendentry{總能量}
+\draw[dashed,thick] (axis cs:0.32,0)--(axis cs:0.32,1.6);
+\draw[dashed,thick] (axis cs:0.55,0)--(axis cs:0.55,1.6);
+\node[rotate=90,anchor=south,font=\normalsize] at (axis cs:0.245,0.68) {功能失效};
+\node[align=center,font=\normalsize] at (axis cs:0.435,1.28) {不滿足\\時序};
+\node[align=center,font=\normalsize] at (axis cs:0.77,0.96) {可行區域\\$V\geq 0.55$ V};
+\fill (axis cs:0.41,0.233) circle (2pt);
+\draw[->] (axis cs:0.46,0.66) node[above]{MEP}--(axis cs:0.412,0.25);
+\fill (axis cs:0.55,0.3093) circle (2pt);
+\draw[->] (axis cs:0.79,0.17) node[above,align=center]{受限制的\\最佳點}--(axis cs:0.553,0.31);
+\end{axis}
+\end{tikzpicture}
+\caption{電壓選擇的概念示意。能量範例採用 $E_s=x^2$ 與 $E_l=0.005x\exp[(0.6-x)/0.055]$，其中 $x=\VDD/(1\,\mathrm{V})$，MEP 約在 0.41 V。假設功能／SRAM 下限為 0.32 V、時序下限為 0.55 V；陰影表示不可行區域，受限制的最佳點高於 MEP。所有曲線與界線皆為示意，不是實測或擬合的元件資料。}
+\label{fig:mep}
+\end{figure}
+
+最低點取決於製程、邏輯深度、切換活動、工作負載及閒置狀態。若有效切換活動減少，但漏電未同比下降，兩者平衡便會改變。溫度也會移動最低點；Calhoun 等人的模型在 25--115~$^\circ$C 範圍內顯示約 100 mV 的偏移 \cite[Fig.~15]{calhoun2005}，此數值只適用於該分析條件。
+
+圖~\ref{fig:mep} 假設一個時序所需的最低電壓；實際限制還包含最高供應電壓、PVT 及可靠度。應區分最低功能電壓、未受限制的最低能量電壓，以及支援指定吞吐量的最低電壓。記憶體或時序限制可能排除未受限制的最佳點。在低於該點的電壓量到較低功率，並不能證明固定任務的能量也較低。
+
+\section{PVT 變異與裕量}
+全域製程變異會改變整顆晶片的特性，局部失配則改變鄰近元件的相對驅動能力。在 Dreslinski 等人討論的歷史製程中， random dopant fluctuation 與 line-edge roughness 都會造成失配 \cite{dreslinski2010}。各機制的重要性取決於製程，不能假定它們主導所有現代元件結構。
+
+式~\eqref{eq:subthreshold} 說明，固定幅度的臨界電壓擾動，為何會大幅影響弱反轉電流。然而，慢速與快速條件之間的差距，不能直接等同變異係數 $\sigma/\mu$。Dreslinski 等人關於約五倍效能變化與環境不確定性的討論，應依原文定義與條件解讀，不能改寫為延遲標準差普遍增加五倍 \cite[Sec.~IV-B]{dreslinski2010}。
+
+Gonzalez 等人提供另一個分析例子：未納入所述不確定性時，模型最佳點約為 $\VDD=254$ mV、$\VTH=119$ mV；加入不確定性後，則移至約 0.5 V 與 0.2 V \cite[Figs.~3 and 6]{gonzalez1997}。這些是模型的能量延遲最佳化結果，而非任意製程皆適用的實測建議設定。
+
+最差情況裕量在低電壓下仍有物理意義，只要模型邊界有效，仍可保障操作。問題在於過大的固定裕量可能消耗大部分節能效益。自適應技術希望減少不必要的裕量，但剩餘局部失配、監測誤差、供電暫態及未觀測路徑，仍需要保護。
+
+溫度同時影響載子遷移率與臨界電壓，兩者的競爭效應可能使不同電壓區域呈現不同的延遲溫度關係，因此最高溫不一定在所有電壓下都是最慢條件。同樣地，穩壓器的設定電壓也會因 IR 壓降、電源漣波及瞬間下陷，而與實際切換閘上的電壓不同。驗證應涵蓋這些因素的組合，而非只獨立檢查標稱電壓與單一溫度角落。
+
+\section{SRAM 與雜訊邊限}
+傳統 6T SRAM 單元必須保留資料、承受讀取擾動並允許寫入。讀取時，存取電晶體將內部儲存節點連接至位元線；若下拉能力相對存取電晶體過弱，節點電壓可能上升而破壞儲存狀態。寫入時，存取路徑則須克服交叉耦合反相器的回授。讀取穩定性與寫入能力各自偏好不同的驅動比例，失配使兩者更難同時保證 \cite{dreslinski2010,udvs2010}。
+
+陣列規模會放大罕見失效的影響。在刻意簡化的獨立位元模型下，具有 $M$ 個位元、單位元失效機率為 $p$ 的陣列，其全部正確機率為 $(1-p)^M$。相關性、修復、備援與錯誤更正都會改變實際良率。此式說明即使單元失效率很低，大型記憶體仍可能無法接受；它本身不足以預測產品良率。
+
+ near-threshold 綜述在其研究背景下，討論記憶體失效率最多增加五個數量級 \cite{dreslinski2010}。此相對變化並非位元錯誤率規格，必須搭配基準、電壓範圍、拓撲與統計模型。設計上應問的是：完整陣列能否在所選電壓滿足良率及存取要求。
+
+邏輯 noise margin 通常寫為
+\begin{equation}
+NM_L=V_{\mathrm{IL}}-V_{\mathrm{OL}},\qquad
+NM_H=V_{\mathrm{OH}}-V_{\mathrm{IH}}.
+\end{equation}
+降低供應電壓會縮小可用於訊號恢復的絕對電壓範圍；實際邊限由轉移曲線增益、元件比例、漏電與負載共同決定。邏輯閘即使仍有全擺幅，也可能較難承受固定幅度的外部擾動。電壓足夠低時，競爭的漏電路徑甚至可能使有效靜態位準無法建立，因此僅降低頻率無法修復所有失效。
+
+ pass-transistor 電路也呈現類似限制。單一類型的傳輸元件可能因臨界電壓降而損失訊號振幅，削弱後級驅動，並可能增加接收端反相器的靜態電流。恢復完整邏輯位準或使用專用感測，都會增加能量與延遲。因此，較少的電晶體數目並不足以證明低電壓表現較好 \cite{chandrakasan1992,markovic2010}。
+
+\section{物理與操作限制}
+對理想長通道、以熱發射機制導電的傳統 MOSFET， subthreshold swing 為
+\begin{equation}
+S=\frac{dV_{\mathrm{GS}}}{d\log_{10}I_D}=nU_T\ln 10.
+\end{equation}
+室溫下，理想 $n=1$ 時約為 60 mV/decade。此數值限制有限閘極電壓擺幅所能產生的電流變化，並不是數位系統通用的最低供應電壓 \cite{chandrakasan1992}。
+
+可實際採用的供應電壓必須滿足邏輯、陣列、時序與介面限制。MEP 是在相關條件下的能量最佳化結果，而不是熱力學極限。
+
